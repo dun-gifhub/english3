@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --app-bg-base: #0D1B2A;
+    --app-bg-surface: #131F2E;
+    --app-bg-card: #1B263B;
+    --app-border: #27384E;
+    --app-accent: #00E5FF;
+    --app-text-main: #F8F9FA;
+    --app-text-muted: #778DA9;
+
+    --color-navy-900: var(--app-bg-base);
+    --color-navy-800: var(--app-bg-card);
+    --color-navy-700: var(--app-border);
+    --color-navy-600: #415A77;
+    --color-slate-blue: var(--app-text-muted);
+    --color-cyan-accent: var(--app-accent);
+    --color-gold-yellow: #FFD166;
+    --color-green-success: #06D6A0;
+    --color-red-danger: #EF476F;
+    --color-purple-neon: #9D4EDD;
+  }
+
+  html.light {
+    --app-bg-base: #F8FAFC;
+    --app-bg-surface: #F1F5F9;
+    --app-bg-card: #FFFFFF;
+    --app-border: #E2E8F0;
+    --app-accent: #2563EB;
+    --app-text-main: #0F172A;
+    --app-text-muted: #64748B;
+  }
+}
+
+/* Dynamic Themed Root Wrapper */
+.app-theme-root {
+  background-color: var(--app-bg-base);
+  color: var(--app-text-main);
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+/* Light Mode Overrides for hardcoded elements */
+html.light .app-theme-root {
+  background-color: var(--app-bg-base) !important;
+  color: var(--app-text-main) !important;
+}
+
+html.light header {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  border-color: #E2E8F0 !important;
+}
+
+html.light header .text-white {
+  color: #0F172A !important;
+}
+
+html.light .bg-\[\#1B263B\] {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+html.light .bg-\[\#131F2E\] {
+  background-color: #F1F5F9 !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+html.light .bg-\[\#0D1B2A\] {
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+html.light .border-\[\#27384E\] {
+  border-color: #E2E8F0 !important;
+}
+
+html.light .text-\[\#778DA9\],
+html.light .text-\[\#CBD5E1\],
+html.light .text-\[\#ADB5BD\] {
+  color: #64748B !important;
+}
+
+html.light .text-white {
+  color: #0F172A !important;
+}
+
+/* Aesthetic Styles */
+html.theme-style-3d .app-theme-root .rounded-2xl,
+html.theme-style-3d .app-theme-root .rounded-3xl {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+}
+
+html.theme-style-minimal .app-theme-root .rounded-3xl {
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+html.theme-style-handdrawn .app-theme-root .border-\[\#27384E\],
+html.theme-style-handdrawn .app-theme-root .border {
+  border-style: dashed !important;
+  border-width: 1.5px !important;
+}
+
+/* Custom animations for falling words and neon glow */
+@keyframes pulseSlow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.02); }
+}
+
+@keyframes floatWord {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-pulse-slow {
+  animation: pulseSlow 3s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: floatWord 2s ease-in-out infinite;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--app-bg-base);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--app-border);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--app-accent);
+}
