@@ -252,10 +252,10 @@ export const ThemeCustomizerModal: React.FC<ThemeCustomizerModalProps> = ({ isOp
                       <button
                         key={p.id}
                         onClick={() => {
-                          const next = {
+                          const next: ThemeConfig = {
                             ...localTheme,
                             preset: p.id as any,
-                            mode: p.isLight ? 'light' : localTheme.mode === 'light' ? 'dark' : localTheme.mode,
+                            mode: (p.isLight ? 'light' : localTheme.mode === 'light' ? 'dark' : localTheme.mode) as ThemeConfig['mode'],
                             primaryColor: p.accent
                           };
                           setLocalTheme(next);
