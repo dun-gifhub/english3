@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp, getDisplayClassName, getCurrentSchoolYearString } from '../context/AppContext';
 import { GradeSelector } from '../components/GradeSelector';
-import { UnitTopic, TeacherAssignment, GrammarLesson } from '../types';
+import { UnitTopic, TeacherAssignment, GrammarLesson, ThemeConfig } from '../types';
 import {
   Zap,
   Play,
@@ -15,20 +15,32 @@ import {
   ShieldCheck,
   Flame,
   Award,
-  Activity
+  Activity,
+  Palette,
+  Plus,
+  Volume2,
+  BookmarkCheck,
+  Layers,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { UnitWordPreviewModal } from '../components/UnitWordPreviewModal';
+import { StudentAddWordModal } from '../components/StudentAddWordModal';
+import { audioService } from '../services/audioService';
+import { THEME_PRESETS, applyThemeToDom } from '../services/themeService';
 
 interface HomeScreenProps {
   onPlayUnit: (unit: UnitTopic) => void;
   onTakeAssignment: (assignment: TeacherAssignment) => void;
   onOpenTeacherPortal: () => void;
+  onRequestThemeModal?: () => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onPlayUnit,
   onTakeAssignment,
-  onOpenTeacherPortal
+  onOpenTeacherPortal,
+  onRequestThemeModal
 }) => {
   const {
     currentUser,
@@ -37,13 +49,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     grammarLessons,
     assignments,
     onlineUsers,
-    onlineStudentsCount
+    onlineStudentsCount,
+    customWords,
+    themeConfig,
+    setThemeConfig
   } = useApp();
 
   const [activeSection, setActiveSection] = useState<'words' | 'grammar' | 'assignments'>('words');
   const [copiedCode, setCopiedCode] = useState(false);
   const [selectedGrammar, setSelectedGrammar] = useState<GrammarLesson | null>(null);
   const [previewUnit, setPreviewUnit] = useState<UnitTopic | null>(null);
+  const [showAddWordModal, setShowAddWordModal] = useState<boolean>(false);
+  const [speakingWordId, setSpeakingWordId] = useState<string | null>(null);
 
   const currentSubject = subjects[0];
   const schoolYear = getCurrentSchoolYearString();
@@ -53,6 +70,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     navigator.clipboard.writeText(currentUser.friendCode);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handlePlayWordAudio = (wordText: string, id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSpeakingWordId(id);
+    audioService.speakEnglish(wordText);
+    setTimeout(() => setSpeakingWordId(null), 1200);
+  };
+
+  const handleQuickSelectPreset = async (presetId: string, isLight: boolean) => {
+    const next: ThemeConfig = {
+      ...themeConfig,
+      preset: presetId as any,
+      mode: isLight ? 'light' : 'dark'
+    };
+    applyThemeToDom(next);
+    await setThemeConfig(next);
   };
 
   const xpInCurrentLevel = (currentUser?.xp || 0) % 500;
@@ -136,6 +170,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               {copiedCode ? <Check size={14} className="text-[#06D6A0]" /> : <Copy size={14} />}
               <span>{currentUser?.friendCode || 'LP-2026'}</span>
             </button>
+
+            {/* Student Add Word Quick Button */}
+            <button
+              onClick={() => setShowAddWordModal(true)}
+              className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-[#06D6A0] to-[#00E5FF] hover:from-[#05c08e] hover:to-[#00b4cc] text-[#0D1B2A] flex items-center gap-1.5 transition-all text-xs font-black cursor-pointer shadow-md shadow-[#06D6A0]/20 hover:scale-105"
+              title="Thêm từ vựng mới vào kho học tập và game săn từ"
+            >
+              <Plus size={15} />
+              <span>+ Thêm Từ Mới</span>
+            </button>
+
+            {/* Theme Customizer Button for Students */}
+            {onRequestThemeModal && (
+              <button
+                onClick={onRequestThemeModal}
+                className="px-3.5 py-2.5 rounded-2xl bg-[#1E2D40] hover:bg-[#27384E] text-[#FFD166] hover:text-white border border-[#FFD166]/40 flex items-center gap-1.5 transition-all text-xs font-bold cursor-pointer shadow-sm hover:border-[#FFD166]/80"
+                title="Đổi giao diện, màu sắc & hình nền không gian học tập"
+              >
+                <Palette size={15} className="text-[#FFD166]" />
+                <span>Đổi Giao Diện</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -145,6 +201,80 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <span>
             Hệ thống phân cấp chuẩn GDPT từ Lớp 6 đến Lớp 12. Khối lớp tự động nâng hạng vào tháng 9 hàng năm.
           </span>
+        </div>
+      </div>
+
+      {/* Student Theme & Workspace Customizer Hub */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-[#1B263B]/90 border border-[#27384E] shadow-xl space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#FFD166]/20 text-[#FFD166] flex items-center justify-center font-black">
+              <Palette size={16} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-sm font-extrabold text-white">Giao Diện Học Tập Của Bạn</h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/30 capitalize">
+                  {themeConfig?.preset || 'THPT Lương Phú'} ({themeConfig?.mode === 'light' ? 'Sáng' : 'Tối'})
+                </span>
+                {themeConfig?.customBgImage && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#9D4EDD]/20 text-[#9D4EDD] border border-[#9D4EDD]/30">
+                    Ảnh Nền Tùy Chỉnh
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-[#778DA9]">
+                Tùy biến phong cách màu sắc, chế độ sáng/tối, ảnh nền và phông chữ yêu thích cho học sinh
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {onRequestThemeModal && (
+              <button
+                onClick={onRequestThemeModal}
+                className="px-3.5 py-1.5 rounded-xl bg-[#131F2E] hover:bg-[#27384E] text-[#FFD166] border border-[#FFD166]/30 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Layers size={13} />
+                <span>Tùy Biến Đầy Đủ</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 5 Fast-Switch Student Presets */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 text-xs">
+          {[
+            { id: 'navy', label: 'THPT Lương Phú', color: '#00E5FF', isLight: false },
+            { id: 'cyberpunk', label: 'Cyberpunk Neon', color: '#00FF66', isLight: false },
+            { id: 'minimal', label: 'Pastel Mộng Mơ', color: '#E11D48', isLight: true },
+            { id: 'warm', label: 'Giấy Vở Tự Nhiên', color: '#D97706', isLight: true },
+            { id: 'slate', label: 'Đêm Huyền Ảo', color: '#60A5FA', isLight: false }
+          ].map((p) => {
+            const isCurrent = themeConfig?.preset === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => handleQuickSelectPreset(p.id, p.isLight)}
+                className={`p-2.5 rounded-2xl border transition-all flex items-center gap-2 cursor-pointer text-left ${
+                  isCurrent
+                    ? 'border-[#00E5FF] bg-[#131F2E] shadow-md shadow-[#00E5FF]/20 ring-1 ring-[#00E5FF]'
+                    : 'border-[#27384E] bg-[#131F2E]/60 hover:bg-[#1E2D40] hover:border-[#778DA9]/50'
+                }`}
+              >
+                <div
+                  className="w-4 h-4 rounded-full shrink-0 border border-white/20 flex items-center justify-center"
+                  style={{ backgroundColor: p.color }}
+                >
+                  {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </div>
+                <div className="truncate">
+                  <span className="font-bold text-white text-[11px] block truncate">{p.label}</span>
+                  <span className="text-[9px] text-[#778DA9] block">{p.isLight ? 'Giao diện Sáng' : 'Giao diện Tối'}</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -253,7 +383,98 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {/* SECTION 1: VOCABULARY & TAP GAME UNITS */}
       {activeSection === 'words' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          {/* Student & Teacher Vocabulary Notebook Hub */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-linear-to-r from-[#1B263B] via-[#132233] to-[#1B263B] border border-[#06D6A0]/40 shadow-xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#06D6A0]/20 text-[#06D6A0] border border-[#06D6A0]/30 flex items-center justify-center font-black shadow-md shadow-[#06D6A0]/10 shrink-0">
+                  <BookmarkCheck size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-extrabold text-white">Sổ Tay Từ Vựng & Thêm Từ Mới</h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-[#06D6A0]/20 text-[#06D6A0] border border-[#06D6A0]/30">
+                      {customWords.length} Từ Tự Thêm
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#778DA9]">
+                    Tự thêm từ mới bạn gặp khi học bài hoặc tra từ điển để luyện tập và thi đấu săn từ (Tap Hunter)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setShowAddWordModal(true)}
+                  className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-[#06D6A0] to-[#00E5FF] hover:from-[#05c08e] hover:to-[#00b4cc] text-[#0D1B2A] text-xs font-black transition-all flex items-center gap-1.5 shadow-lg shadow-[#06D6A0]/20 cursor-pointer hover:scale-105"
+                >
+                  <Plus size={16} />
+                  <span>+ Thêm Từ Mới</span>
+                </button>
+
+                {(currentUser?.role === 'TEACHER' || currentUser?.role === 'ADMIN') && (
+                  <button
+                    onClick={onOpenTeacherPortal}
+                    className="px-3 py-2.5 rounded-2xl bg-[#131F2E] border border-[#27384E] text-[#CBD5E1] hover:text-white text-xs font-bold transition cursor-pointer"
+                  >
+                    Quản Lý Từ GV
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Custom Words Preview Strip */}
+            {customWords.length > 0 ? (
+              <div className="pt-2 border-t border-[#27384E]/70 space-y-2">
+                <div className="flex items-center justify-between text-xs text-[#778DA9]">
+                  <span>Từ mới gần đây của bạn & thầy cô:</span>
+                  <span className="text-[#00E5FF] font-bold">Lớp {selectedGrade}</span>
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                  {customWords.slice(0, 10).map((cw) => (
+                    <div
+                      key={cw.id}
+                      className="px-3 py-2 rounded-2xl bg-[#131F2E] border border-[#27384E] hover:border-[#00E5FF]/40 transition shrink-0 flex items-center gap-2.5 shadow-xs"
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => handlePlayWordAudio(cw.word, cw.id, e)}
+                        className={`p-1.5 rounded-lg ${
+                          speakingWordId === cw.id
+                            ? 'bg-[#00E5FF] text-[#0D1B2A]'
+                            : 'bg-[#27384E] text-[#00E5FF] hover:bg-[#00E5FF]/20'
+                        } transition cursor-pointer`}
+                        title="Nghe phát âm"
+                      >
+                        <Volume2 size={13} />
+                      </button>
+                      <div className="text-left">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-extrabold text-white">{cw.word}</span>
+                          <span className="text-[10px] text-[#FFD166] font-mono">{cw.phonetic}</span>
+                        </div>
+                        <span className="text-[11px] text-[#06D6A0] font-medium block truncate max-w-[140px]">
+                          {cw.meaningVi}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {customWords.length > 10 && (
+                    <span className="text-[11px] text-[#778DA9] px-2 whitespace-nowrap">
+                      +{customWords.length - 10} từ khác...
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="pt-2 border-t border-[#27384E]/50 flex items-center justify-between gap-3 text-xs text-[#778DA9]">
+                <span>Chưa có từ mới nào. Bấm <strong>+ Thêm Từ Mới</strong> để tạo bộ từ vựng cá nhân của bạn!</span>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {currentSubject?.units.map((unit) => {
             const isTeacherAdded = unit.unitNumber === 0;
             return (
@@ -335,6 +556,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             );
           })}
         </div>
+      </div>
       )}
 
       {/* SECTION 2: GRAMMAR LESSONS */}
@@ -506,6 +728,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           setPreviewUnit(null);
           onPlayUnit(u);
         }}
+      />
+
+      {/* Student Add Word Modal */}
+      <StudentAddWordModal
+        isOpen={showAddWordModal}
+        onClose={() => setShowAddWordModal(false)}
+        defaultGrade={selectedGrade}
       />
     </div>
   );

@@ -12,7 +12,8 @@ import {
   Trophy,
   Sparkles,
   Database,
-  Shield
+  Shield,
+  Palette
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -20,13 +21,15 @@ interface NavbarProps {
   onTabChange: (tab: string) => void;
   onRequestTeacherModal: () => void;
   onRequestNeonModal?: () => void;
+  onRequestThemeModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentTab,
   onTabChange,
   onRequestTeacherModal,
-  onRequestNeonModal
+  onRequestNeonModal,
+  onRequestThemeModal
 }) => {
   const {
     currentUser,
@@ -187,6 +190,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Flame size={14} className="animate-pulse" />
               <span>{currentUser?.streakDays || 1}d</span>
             </div>
+
+            {/* Theme Customizer Toggle */}
+            {onRequestThemeModal && (
+              <button
+                onClick={onRequestThemeModal}
+                className="px-2.5 py-1 rounded-xl bg-[#1E2D40] hover:bg-[#27384E] text-[#FFD166] hover:text-white border border-[#FFD166]/40 transition-all cursor-pointer flex items-center gap-1.5 shadow-sm hover:border-[#FFD166]/80"
+                title="Đổi giao diện & hình nền học tập"
+              >
+                <Palette size={15} className="text-[#FFD166]" />
+                <span className="text-[11px] sm:text-xs font-extrabold">Giao Diện</span>
+              </button>
+            )}
 
             {/* Sound toggle */}
             <button

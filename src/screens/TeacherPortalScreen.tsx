@@ -42,7 +42,15 @@ import {
   Palette,
   ExternalLink,
   ChevronRight,
-  Filter
+  Filter,
+  Volume2,
+  Languages,
+  BookA,
+  Upload,
+  X,
+  FileSpreadsheet,
+  HelpCircle,
+  CheckSquare
 } from 'lucide-react';
 import { SmartExamBuilderModal } from '../components/SmartExamBuilderModal';
 import { ThemeCustomizerModal } from '../components/ThemeCustomizerModal';
@@ -50,9 +58,11 @@ import { BatchExamFileImportModal } from '../components/BatchExamFileImportModal
 import { BatchWordImportModal } from '../components/BatchWordImportModal';
 import { BatchGrammarImportModal } from '../components/BatchGrammarImportModal';
 import { apiService } from '../services/apiService';
+import { audioService } from '../services/audioService';
+import { lookupDictionary } from '../services/dictionaryDatabase';
 
 interface TeacherPortalScreenProps {
-  initialTab?: 'exams' | 'curriculum' | 'classes' | 'grading' | 'monitor' | 'bank' | 'settings';
+  initialTab?: 'exams' | 'vocabulary' | 'grammar' | 'curriculum' | 'classes' | 'grading' | 'monitor' | 'bank' | 'settings';
 }
 
 export const TeacherPortalScreen: React.FC<TeacherPortalScreenProps> = ({
@@ -66,6 +76,18 @@ export const TeacherPortalScreen: React.FC<TeacherPortalScreenProps> = ({
     curriculumLessons,
     submissions,
     questionBank,
+    customWords,
+    addCustomWord,
+    addCustomWordsBatch,
+    updateCustomWord,
+    deleteCustomWord,
+    clearAllCustomWords,
+    customGrammar,
+    addCustomGrammar,
+    addCustomGrammarBatch,
+    updateCustomGrammar,
+    deleteCustomGrammar,
+    clearAllCustomGrammar,
     addClass,
     removeClass,
     addCurriculumUnit,
@@ -86,13 +108,55 @@ export const TeacherPortalScreen: React.FC<TeacherPortalScreenProps> = ({
     refreshEdTechData
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'exams' | 'curriculum' | 'classes' | 'grading' | 'monitor' | 'bank' | 'settings'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'exams' | 'vocabulary' | 'grammar' | 'curriculum' | 'classes' | 'grading' | 'monitor' | 'bank' | 'settings'>(initialTab);
 
   // Modals state
   const [showExamBuilder, setShowExamBuilder] = useState<boolean>(false);
   const [editingAssignment, setEditingAssignment] = useState<TeacherAssignment | null>(null);
   const [showThemeModal, setShowThemeModal] = useState<boolean>(false);
   const [showBatchExamFileModal, setShowBatchExamFileModal] = useState<boolean>(false);
+
+  // Vocabulary (Từ Mới) States
+  const [showAddWordModal, setShowAddWordModal] = useState<boolean>(false);
+  const [editingWord, setEditingWord] = useState<WordItem | null>(null);
+  const [showBatchWordModal, setShowBatchWordModal] = useState<boolean>(false);
+  const [speakingWordId, setSpeakingWordId] = useState<string | null>(null);
+
+  // Single Word Form inputs
+  const [wordInput, setWordInput] = useState<string>('');
+  const [phoneticInput, setPhoneticInput] = useState<string>('');
+  const [meaningInput, setMeaningInput] = useState<string>('');
+  const [partOfSpeechInput, setPartOfSpeechInput] = useState<string>('noun');
+  const [wordGradeInput, setWordGradeInput] = useState<number>(10);
+  const [wordUnitInput, setWordUnitInput] = useState<number>(1);
+  const [exampleEnInput, setExampleEnInput] = useState<string>('');
+  const [exampleViInput, setExampleViInput] = useState<string>('');
+  const [distractor1Input, setDistractor1Input] = useState<string>('');
+  const [distractor2Input, setDistractor2Input] = useState<string>('');
+  const [distractor3Input, setDistractor3Input] = useState<string>('');
+
+  // Vocabulary Search & Filter
+  const [wordSearchTerm, setWordSearchTerm] = useState<string>('');
+  const [wordGradeFilter, setWordGradeFilter] = useState<number>(0); // 0 = all
+  const [wordUnitFilter, setWordUnitFilter] = useState<number>(0); // 0 = all
+
+  // Grammar (Ngữ Pháp) States
+  const [showAddGrammarModal, setShowAddGrammarModal] = useState<boolean>(false);
+  const [editingGrammar, setEditingGrammar] = useState<GrammarLesson | null>(null);
+  const [showBatchGrammarModal, setShowBatchGrammarModal] = useState<boolean>(false);
+
+  // Single Grammar Form inputs
+  const [grammarTitleInput, setGrammarTitleInput] = useState<string>('');
+  const [grammarGradeInput, setGrammarGradeInput] = useState<number>(10);
+  const [grammarFormulaInput, setGrammarFormulaInput] = useState<string>('');
+  const [grammarExplanationInput, setGrammarExplanationInput] = useState<string>('');
+  const [grammarExampleEnInput, setGrammarExampleEnInput] = useState<string>('');
+  const [grammarExampleViInput, setGrammarExampleViInput] = useState<string>('');
+  const [grammarUsageNotesInput, setGrammarUsageNotesInput] = useState<string>('');
+
+  // Grammar Search & Filter
+  const [grammarSearchTerm, setGrammarSearchTerm] = useState<string>('');
+  const [grammarGradeFilter, setGrammarGradeFilter] = useState<number>(0); // 0 = all
 
   // New Class Form State
   const [showCreateClassModal, setShowCreateClassModal] = useState<boolean>(false);
@@ -114,7 +178,7 @@ export const TeacherPortalScreen: React.FC<TeacherPortalScreenProps> = ({
   const [gradingFeedback, setGradingFeedback] = useState<string>('');
   const [gradingFinalScore, setGradingFinalScore] = useState<number>(0);
 
-  // Search & Filter
+  // Search & Filter (Exams)
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedGradeFilter, setSelectedGradeFilter] = useState<number>(0); // 0 = all
 
@@ -124,6 +188,278 @@ export const TeacherPortalScreen: React.FC<TeacherPortalScreenProps> = ({
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
+
+  // Speak word handler
+  const handlePlayAudio = (word: string, id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSpeakingWordId(id);
+    audioService.speakEnglish(word);
+    setTimeout(() => setSpeakingWordId(null), 1200);
+  };
+
+  // Auto-fill from offline dictionary
+  const handleAutoFillFromDictionary = (wordText: string) => {
+    const clean = wordText.trim().toLowerCase();
+    if (!clean) return;
+    const found = lookupDictionary(clean, true);
+    if (found && found.length > 0) {
+      const top = found[0];
+      if (top.phonetic && !phoneticInput) setPhoneticInput(top.phonetic);
+      if (top.meaningVi && !meaningInput) setMeaningInput(top.meaningVi);
+      if (top.partOfSpeech) setPartOfSpeechInput(top.partOfSpeech.toLowerCase());
+      if (top.exampleEn && !exampleEnInput) setExampleEnInput(top.exampleEn);
+      if (top.exampleVi && !exampleViInput) setExampleViInput(top.exampleVi);
+      showToast(`Đã tìm thấy thông tin tự động cho từ "${wordText}"!`);
+    } else {
+      showToast(`Không tìm thấy trong từ điển có sẵn, bạn có thể tự nhập phiên âm.`);
+    }
+  };
+
+  // Open add word modal
+  const openAddWordModal = (prefillGrade?: number, prefillUnit?: number) => {
+    setEditingWord(null);
+    setWordInput('');
+    setPhoneticInput('');
+    setMeaningInput('');
+    setPartOfSpeechInput('noun');
+    setWordGradeInput(prefillGrade ?? (wordGradeFilter || 10));
+    setWordUnitInput(prefillUnit ?? 1);
+    setExampleEnInput('');
+    setExampleViInput('');
+    setDistractor1Input('');
+    setDistractor2Input('');
+    setDistractor3Input('');
+    setShowAddWordModal(true);
+  };
+
+  // Open edit word modal
+  const openEditWordModal = (word: WordItem) => {
+    setEditingWord(word);
+    setWordInput(word.word);
+    setPhoneticInput(word.phonetic || '');
+    setMeaningInput(word.meaningVi);
+    setPartOfSpeechInput(word.partOfSpeech || 'noun');
+    setWordGradeInput(word.grade);
+    setWordUnitInput(word.unitNumber);
+    setExampleEnInput(word.exampleEn || '');
+    setExampleViInput(word.exampleVi || '');
+    setDistractor1Input(word.distractorsVi?.[0] || '');
+    setDistractor2Input(word.distractorsVi?.[1] || '');
+    setDistractor3Input(word.distractorsVi?.[2] || '');
+    setShowAddWordModal(true);
+  };
+
+  // Save single word handler
+  const handleSaveWord = () => {
+    if (!wordInput.trim() || !meaningInput.trim()) {
+      showToast('Vui lòng nhập từ tiếng Anh và dịch nghĩa tiếng Việt!');
+      return;
+    }
+    const distractors = [distractor1Input.trim(), distractor2Input.trim(), distractor3Input.trim()].filter(Boolean);
+    if (distractors.length === 0) {
+      distractors.push('phương án sai A', 'nghĩa tương tự B', 'ngược nghĩa C');
+    }
+
+    if (editingWord) {
+      updateCustomWord({
+        ...editingWord,
+        word: wordInput.trim(),
+        phonetic: phoneticInput.trim() || `/${wordInput.trim().toLowerCase()}/`,
+        meaningVi: meaningInput.trim(),
+        partOfSpeech: partOfSpeechInput,
+        grade: wordGradeInput,
+        unitNumber: wordUnitInput,
+        exampleEn: exampleEnInput.trim(),
+        exampleVi: exampleViInput.trim(),
+        distractorsVi: distractors
+      });
+      showToast(`Đã cập nhật từ "${wordInput.trim()}" thành công!`);
+    } else {
+      addCustomWord({
+        word: wordInput.trim(),
+        phonetic: phoneticInput.trim() || `/${wordInput.trim().toLowerCase()}/`,
+        meaningVi: meaningInput.trim(),
+        partOfSpeech: partOfSpeechInput,
+        grade: wordGradeInput,
+        unitNumber: wordUnitInput,
+        exampleEn: exampleEnInput.trim(),
+        exampleVi: exampleViInput.trim(),
+        distractorsVi: distractors
+      });
+      showToast(`Đã thêm từ mới "${wordInput.trim()}" vào Unit ${wordUnitInput} (Lớp ${wordGradeInput})!`);
+    }
+    setShowAddWordModal(false);
+    setEditingWord(null);
+  };
+
+  // Open add grammar modal
+  const openAddGrammarModal = (prefillGrade?: number) => {
+    setEditingGrammar(null);
+    setGrammarTitleInput('');
+    setGrammarGradeInput(prefillGrade ?? 10);
+    setGrammarFormulaInput('');
+    setGrammarExplanationInput('');
+    setGrammarExampleEnInput('');
+    setGrammarExampleViInput('');
+    setGrammarUsageNotesInput('');
+    setShowAddGrammarModal(true);
+  };
+
+  // Open edit grammar modal
+  const openEditGrammarModal = (lesson: GrammarLesson) => {
+    setEditingGrammar(lesson);
+    setGrammarTitleInput(lesson.title);
+    setGrammarGradeInput(lesson.grade);
+    setGrammarFormulaInput(lesson.formula);
+    setGrammarExplanationInput(lesson.explanationVi);
+    setGrammarExampleEnInput(lesson.exampleEn);
+    setGrammarExampleViInput(lesson.exampleVi);
+    setGrammarUsageNotesInput(lesson.usageNotes);
+    setShowAddGrammarModal(true);
+  };
+
+  // Save grammar handler
+  const handleSaveGrammar = () => {
+    if (!grammarTitleInput.trim() || !grammarFormulaInput.trim()) {
+      showToast('Vui lòng nhập tên chuyên đề và công thức ngữ pháp!');
+      return;
+    }
+    if (editingGrammar) {
+      updateCustomGrammar({
+        ...editingGrammar,
+        title: grammarTitleInput.trim(),
+        grade: grammarGradeInput,
+        formula: grammarFormulaInput.trim(),
+        explanationVi: grammarExplanationInput.trim(),
+        exampleEn: grammarExampleEnInput.trim(),
+        exampleVi: grammarExampleViInput.trim(),
+        usageNotes: grammarUsageNotesInput.trim()
+      });
+      showToast(`Đã cập nhật chuyên đề "${grammarTitleInput.trim()}" thành công!`);
+    } else {
+      addCustomGrammar({
+        title: grammarTitleInput.trim(),
+        grade: grammarGradeInput,
+        formula: grammarFormulaInput.trim(),
+        explanationVi: grammarExplanationInput.trim(),
+        exampleEn: grammarExampleEnInput.trim(),
+        exampleVi: grammarExampleViInput.trim(),
+        usageNotes: grammarUsageNotesInput.trim()
+      });
+      showToast(`Đã thêm chuyên đề ngữ pháp "${grammarTitleInput.trim()}" thành công!`);
+    }
+    setShowAddGrammarModal(false);
+    setEditingGrammar(null);
+  };
+
+  // Load sample words
+  const handleLoadSampleWords = async () => {
+    const sampleWords: Omit<WordItem, 'id'>[] = [
+      {
+        word: 'breadwinner',
+        phonetic: '/ˈbredwɪn.ər/',
+        meaningVi: 'người trụ cột kiếm tiền cho gia đình',
+        partOfSpeech: 'noun',
+        grade: 10,
+        unitNumber: 1,
+        exampleEn: 'In many modern families, both parents are breadwinners.',
+        exampleVi: 'Trong nhiều gia đình hiện đại, cả bố và mẹ đều là những người trụ cột kiếm tiền.',
+        distractorsVi: ['người nội trợ', 'con một', 'hàng xóm']
+      },
+      {
+        word: 'homemaker',
+        phonetic: '/ˈhəʊmˌmeɪ.kər/',
+        meaningVi: 'người quán xuyến nội trợ gia đình',
+        partOfSpeech: 'noun',
+        grade: 10,
+        unitNumber: 1,
+        exampleEn: 'My mother is a devoted homemaker who keeps everything organized.',
+        exampleVi: 'Mẹ tôi là một người nội trợ tận tụy luôn giữ mọi thứ ngăn nắp.',
+        distractorsVi: ['thợ săn', 'trụ cột kinh tế', 'thầy giáo']
+      },
+      {
+        word: 'heavy lifting',
+        phonetic: '/ˌhev.i ˈlɪf.tɪŋ/',
+        meaningVi: 'công việc mang vác nặng nhọc trong nhà',
+        partOfSpeech: 'noun',
+        grade: 10,
+        unitNumber: 1,
+        exampleEn: 'My elder brother always volunteers to do the heavy lifting at home.',
+        exampleVi: 'Anh trai tôi luôn xung phong làm những công việc nặng nhọc trong nhà.',
+        distractorsVi: ['rửa bát đĩa', 'nấu bữa sáng', 'quét nhà']
+      },
+      {
+        word: 'carbon footprint',
+        phonetic: '/ˌkɑː.bən ˈfʊt.prɪnt/',
+        meaningVi: 'dấu chân carbon (lượng phát thải CO2)',
+        partOfSpeech: 'noun',
+        grade: 10,
+        unitNumber: 2,
+        exampleEn: 'Cycling to school helps cut down your personal carbon footprint.',
+        exampleVi: 'Đi xe đạp đến trường giúp cắt giảm lượng phát thải carbon của bạn.',
+        distractorsVi: ['năng lượng mặt trời', 'chất thải độc hại', 'rác hữu cơ']
+      },
+      {
+        word: 'eco-friendly',
+        phonetic: '/ˌiː.kəʊˈfrend.li/',
+        meaningVi: 'thân thiện với môi trường tự nhiên',
+        partOfSpeech: 'adjective',
+        grade: 10,
+        unitNumber: 2,
+        exampleEn: 'Our school promotes the use of eco-friendly paper bags and cups.',
+        exampleVi: 'Trường học khuyến khích dùng túi và cốc giấy thân thiện môi trường.',
+        distractorsVi: ['ô nhiễm nghiêm trọng', 'đắt tiền', 'dễ cháy nổ']
+      },
+      {
+        word: 'biodiversity',
+        phonetic: '/ˌbaɪ.əʊ.daɪˈvɜː.sə.ti/',
+        meaningVi: 'sự đa dạng sinh thái và sinh học',
+        partOfSpeech: 'noun',
+        grade: 11,
+        unitNumber: 1,
+        exampleEn: 'The tropical rainforest is famous for its rich biodiversity.',
+        exampleVi: 'Rừng mưa nhiệt đới nổi tiếng với sự đa dạng sinh thái phong phú.',
+        distractorsVi: ['biến đổi khí hậu', 'sự tuyệt chủng', 'hiện tượng xói mòn']
+      },
+      {
+        word: 'perseverance',
+        phonetic: '/ˌpɜː.sɪˈvɪə.rəns/',
+        meaningVi: 'lòng kiên trì, bền chí vượt khó khăn',
+        partOfSpeech: 'noun',
+        grade: 12,
+        unitNumber: 1,
+        exampleEn: 'Hard work and perseverance will lead you to exam success.',
+        exampleVi: 'Sự chăm chỉ và kiên trì sẽ đưa bạn đến thành công trong kỳ thi.',
+        distractorsVi: ['sự lười biếng', 'sự nghi ngờ', 'nỗi sợ thất bại']
+      }
+    ];
+
+    const count = await addCustomWordsBatch(sampleWords);
+    showToast(`Đã nạp thành công ${count} từ vựng mẫu chuẩn Global Success!`);
+  };
+
+  // Filtered words
+  const filteredWords = customWords.filter((w) => {
+    const matchGrade = wordGradeFilter === 0 || w.grade === wordGradeFilter;
+    const matchUnit = wordUnitFilter === 0 || w.unitNumber === wordUnitFilter;
+    const matchSearch =
+      !wordSearchTerm ||
+      w.word.toLowerCase().includes(wordSearchTerm.toLowerCase()) ||
+      w.meaningVi.toLowerCase().includes(wordSearchTerm.toLowerCase()) ||
+      (w.phonetic && w.phonetic.toLowerCase().includes(wordSearchTerm.toLowerCase()));
+    return matchGrade && matchUnit && matchSearch;
+  });
+
+  // Filtered grammar
+  const filteredGrammar = customGrammar.filter((g) => {
+    const matchGrade = grammarGradeFilter === 0 || g.grade === grammarGradeFilter;
+    const matchSearch =
+      !grammarSearchTerm ||
+      g.title.toLowerCase().includes(grammarSearchTerm.toLowerCase()) ||
+      g.formula.toLowerCase().includes(grammarSearchTerm.toLowerCase()) ||
+      g.explanationVi.toLowerCase().includes(grammarSearchTerm.toLowerCase());
+    return matchGrade && matchSearch;
+  });
 
   // Filtered assignments
   const filteredAssignments = assignments.filter((a) => {
@@ -159,13 +495,29 @@ export const TeacherPortalScreen: React.FC<TeacherPortalScreenProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
             onClick={() => setShowThemeModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-xs font-bold text-[#CBD5E1] hover:text-white hover:bg-[#27384E] transition"
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-xs font-bold text-[#CBD5E1] hover:text-white hover:bg-[#27384E] transition"
           >
             <Palette size={16} className="text-[#FFD166]" />
-            <span>Giao Diện</span>
+            <span className="hidden sm:inline">Giao Diện</span>
+          </button>
+
+          <button
+            onClick={() => openAddWordModal()}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#06D6A0] text-[#0D1B2A] text-xs font-black hover:bg-[#06D6A0]/90 transition shadow-lg shadow-[#06D6A0]/20"
+          >
+            <Plus size={16} />
+            <span>+ Thêm Từ Mới</span>
+          </button>
+
+          <button
+            onClick={() => setShowBatchWordModal(true)}
+            className="hidden sm:flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#131F2E] border border-[#00E5FF]/40 text-[#00E5FF] text-xs font-bold hover:bg-[#00E5FF]/15 transition"
+          >
+            <Upload size={15} />
+            <span>Nhập File Từ Vựng</span>
           </button>
 
           <button
@@ -173,7 +525,7 @@ export const TeacherPortalScreen: React.FC<TeacherPortalScreenProps> = ({
               setEditingAssignment(null);
               setShowExamBuilder(true);
             }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#00E5FF] text-[#0D1B2A] text-xs font-black hover:bg-[#00E5FF]/90 transition shadow-lg shadow-[#00E5FF]/20"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#00E5FF] text-[#0D1B2A] text-xs font-black hover:bg-[#00E5FF]/90 transition shadow-lg shadow-[#00E5FF]/20"
           >
             <Plus size={16} />
             <span>Tạo Đề Thi Mới</span>
@@ -185,7 +537,9 @@ export const TeacherPortalScreen: React.FC<TeacherPortalScreenProps> = ({
       <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-[#27384E]/80">
         {[
           { id: 'exams', label: 'Quản Lý Đề Thi', icon: FileText, count: assignments.length },
-          { id: 'curriculum', label: 'Unit & Bài Học', icon: BookOpen, count: curriculumUnits.length },
+          { id: 'vocabulary', label: 'Kho Từ Vựng (Thêm Từ Mới)', icon: Languages, count: customWords.length },
+          { id: 'grammar', label: 'Ngữ Pháp (Chuyên Đề)', icon: BookOpen, count: customGrammar.length },
+          { id: 'curriculum', label: 'Unit & Bài Học', icon: BookA, count: curriculumUnits.length },
           { id: 'classes', label: 'Lớp Học & Học Sinh', icon: School, count: classes.length },
           { id: 'grading', label: 'Chấm Thi & Nhận Xét', icon: ClipboardCheck, count: submissions.length },
           { id: 'monitor', label: 'Giám Sát Trực Tiếp', icon: Radio, count: onlineStudentsCount },
@@ -359,6 +713,427 @@ export const TeacherPortalScreen: React.FC<TeacherPortalScreenProps> = ({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* TAB: VOCABULARY MANAGEMENT & ADD NEW WORDS */}
+      {activeTab === 'vocabulary' && (
+        <div className="space-y-4">
+          {/* Top Action Banner */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-[#1B263B] border border-[#27384E] shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#06D6A0]/20 text-[#06D6A0] border border-[#06D6A0]/30">
+                  KHO TỪ VỰNG TRỰC TUYẾN
+                </span>
+                <span className="text-xs text-[#778DA9]">• Lớp 6 đến Lớp 12</span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-black text-white">
+                Biên Soạn & Quản Lý Từ Vựng Học Tập
+              </h3>
+              <p className="text-xs text-[#CBD5E1] max-w-2xl leading-relaxed">
+                Thêm từ vựng mới theo từng khối lớp và Unit. Mọi từ mới bạn thêm ở đây sẽ <strong className="text-[#00E5FF]">tự động đồng bộ ngay lập tức</strong> vào màn hình học tập và đấu trường game <strong className="text-[#06D6A0]">Săn Từ (Tap Hunter)</strong> của học sinh!
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              <button
+                onClick={() => openAddWordModal()}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#06D6A0] text-[#0D1B2A] text-xs font-black hover:bg-[#06D6A0]/90 transition shadow-lg shadow-[#06D6A0]/20 cursor-pointer"
+              >
+                <Plus size={16} />
+                <span>+ Thêm 1 Từ Mới</span>
+              </button>
+
+              <button
+                onClick={() => setShowBatchWordModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#00E5FF] text-[#0D1B2A] text-xs font-black hover:bg-[#00E5FF]/90 transition shadow-lg shadow-[#00E5FF]/20 cursor-pointer"
+              >
+                <Upload size={16} />
+                <span>Nhập File / Excel Hàng Loạt</span>
+              </button>
+
+              {customWords.length === 0 && (
+                <button
+                  onClick={handleLoadSampleWords}
+                  className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#FFD166] text-[#0D1B2A] text-xs font-black hover:bg-[#FFD166]/90 transition shadow-lg cursor-pointer"
+                >
+                  <Sparkles size={15} />
+                  <span>Nạp 7 Từ Mẫu Global Success</span>
+                </button>
+              )}
+
+              {customWords.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm('Bạn có chắc chắn muốn xóa tất cả từ vựng tự thêm?')) {
+                      clearAllCustomWords();
+                      showToast('Đã xóa toàn bộ từ vựng tự thêm');
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-2xl bg-[#131F2E] border border-[#EF476F]/30 text-[#EF476F] text-xs font-bold hover:bg-[#EF476F]/10 transition cursor-pointer"
+                >
+                  <Trash2 size={15} />
+                  <span>Xóa Hết</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="p-4 rounded-2xl bg-[#1B263B] border border-[#27384E] flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3 flex-1 min-w-[240px]">
+              <div className="relative flex-1">
+                <Search size={15} className="absolute left-3 top-3 text-[#778DA9]" />
+                <input
+                  type="text"
+                  value={wordSearchTerm}
+                  onChange={(e) => setWordSearchTerm(e.target.value)}
+                  placeholder="Tìm kiếm từ vựng (tiếng Anh, nghĩa tiếng Việt, IPA)..."
+                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#131F2E] border border-[#27384E] text-white focus:outline-none placeholder:text-[#778DA9]"
+                />
+              </div>
+
+              <select
+                value={wordGradeFilter}
+                onChange={(e) => setWordGradeFilter(Number(e.target.value))}
+                className="px-3 py-2 rounded-xl bg-[#131F2E] border border-[#27384E] text-white font-bold focus:outline-none"
+              >
+                <option value={0}>Tất cả khối lớp</option>
+                {[6, 7, 8, 9, 10, 11, 12].map((g) => (
+                  <option key={g} value={g}>
+                    Khối {g}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={wordUnitFilter}
+                onChange={(e) => setWordUnitFilter(Number(e.target.value))}
+                className="px-3 py-2 rounded-xl bg-[#131F2E] border border-[#27384E] text-white font-bold focus:outline-none"
+              >
+                <option value={0}>Tất cả Unit</option>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((u) => (
+                  <option key={u} value={u}>
+                    Unit {u}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="text-xs text-[#778DA9] font-medium">
+              Đang hiển thị: <strong className="text-white">{filteredWords.length}</strong> / {customWords.length} từ
+            </div>
+          </div>
+
+          {/* Word List Cards */}
+          {filteredWords.length === 0 ? (
+            <div className="p-12 rounded-3xl bg-[#1B263B] border border-[#27384E] text-center space-y-4">
+              <div className="w-16 h-16 rounded-3xl bg-[#00E5FF]/10 text-[#00E5FF] flex items-center justify-center mx-auto border border-[#00E5FF]/20 shadow-inner">
+                <Languages size={32} />
+              </div>
+              <div>
+                <h4 className="text-base font-black text-white">Chưa có từ vựng nào trong danh sách</h4>
+                <p className="text-xs text-[#778DA9] max-w-md mx-auto mt-1">
+                  Hãy nhấn nút <strong className="text-[#06D6A0]">"+ Thêm 1 Từ Mới"</strong> hoặc <strong className="text-[#00E5FF]">"Nhập File / Excel Hàng Loạt"</strong> để bổ sung từ mới cho học sinh ôn luyện!
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 flex-wrap pt-2">
+                <button
+                  onClick={() => openAddWordModal()}
+                  className="px-5 py-2.5 rounded-xl bg-[#06D6A0] text-[#0D1B2A] font-black text-xs hover:bg-[#06D6A0]/90 transition cursor-pointer"
+                >
+                  + Thêm Từ Mới Ngay
+                </button>
+                <button
+                  onClick={handleLoadSampleWords}
+                  className="px-4 py-2.5 rounded-xl bg-[#FFD166] text-[#0D1B2A] font-black text-xs hover:bg-[#FFD166]/90 transition cursor-pointer"
+                >
+                  Nạp 7 Từ Mẫu Global Success
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredWords.map((w) => (
+                <div
+                  key={w.id}
+                  className="p-4 rounded-3xl bg-[#1B263B] border border-[#27384E] flex flex-col justify-between space-y-3 hover:border-[#00E5FF]/50 transition shadow-lg group"
+                >
+                  <div className="space-y-2">
+                    {/* Header line: word, pos, grade, unit */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-base font-black text-white tracking-wide group-hover:text-[#00E5FF] transition">
+                          {w.word}
+                        </span>
+                        {w.partOfSpeech && (
+                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-[#9D4EDD]/20 text-[#D8B4FE] uppercase border border-[#9D4EDD]/30">
+                            {w.partOfSpeech}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30">
+                          Lớp {w.grade}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#131F2E] text-[#FFD166] border border-[#FFD166]/30">
+                          {w.unitNumber === 0 ? 'Bổ sung' : `Unit ${w.unitNumber}`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Pronunciation & Meaning */}
+                    <div className="flex items-center justify-between gap-2 bg-[#131F2E]/80 p-2.5 rounded-2xl border border-[#27384E]/70">
+                      <div>
+                        {w.phonetic && (
+                          <div className="text-xs font-mono text-[#FFD166] font-semibold">{w.phonetic}</div>
+                        )}
+                        <div className="text-xs font-bold text-[#06D6A0] mt-0.5">{w.meaningVi}</div>
+                      </div>
+
+                      <button
+                        onClick={(e) => handlePlayAudio(w.word, w.id, e)}
+                        className={`p-2 rounded-xl transition shrink-0 cursor-pointer ${
+                          speakingWordId === w.id
+                            ? 'bg-[#00E5FF] text-[#0D1B2A] animate-pulse'
+                            : 'bg-[#27384E] text-[#00E5FF] hover:bg-[#00E5FF] hover:text-[#0D1B2A]'
+                        }`}
+                        title="Nghe phát âm chuẩn tiếng Anh"
+                      >
+                        <Volume2 size={16} />
+                      </button>
+                    </div>
+
+                    {/* Example Sentence */}
+                    {(w.exampleEn || w.exampleVi) && (
+                      <div className="p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E]/50 text-[11px] space-y-1">
+                        {w.exampleEn && (
+                          <p className="text-[#CBD5E1] italic">
+                            🇬🇧 {w.exampleEn}
+                          </p>
+                        )}
+                        {w.exampleVi && (
+                          <p className="text-[#778DA9]">
+                            🇻🇳 {w.exampleVi}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Distractors for Quiz/Game */}
+                    {w.distractorsVi && w.distractorsVi.length > 0 && (
+                      <div className="pt-1 text-[10px] text-[#778DA9]">
+                        <span className="font-semibold block mb-1">Từ gây nhiễu trò chơi:</span>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {w.distractorsVi.map((d, di) => (
+                            <span key={di} className="px-2 py-0.5 rounded-md bg-[#131F2E] text-[#ADB5BD] border border-[#27384E]">
+                              {d}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions: Edit & Delete */}
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#27384E]/60">
+                    <button
+                      onClick={() => openEditWordModal(w)}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-xs font-bold text-[#CBD5E1] hover:text-[#00E5FF] hover:border-[#00E5FF]/40 transition cursor-pointer"
+                    >
+                      <Edit3 size={13} />
+                      <span>Sửa</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (confirm(`Xóa từ vựng "${w.word}"?`)) {
+                          deleteCustomWord(w.id);
+                          showToast(`Đã xóa từ "${w.word}"`);
+                        }
+                      }}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#131F2E] border border-[#EF476F]/30 text-xs font-bold text-[#EF476F] hover:bg-[#EF476F]/20 transition cursor-pointer"
+                    >
+                      <Trash2 size={13} />
+                      <span>Xóa</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: GRAMMAR LESSONS */}
+      {activeTab === 'grammar' && (
+        <div className="space-y-4">
+          {/* Header Banner */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-[#1B263B] border border-[#27384E] shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#FFD166]/20 text-[#FFD166] border border-[#FFD166]/30">
+                  CHUYÊN ĐỀ NGỮ PHÁP TRỌNG TÂM
+                </span>
+                <span className="text-xs text-[#778DA9]">• Chuẩn Bộ GD&ĐT</span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-black text-white">
+                Biên Soạn Công Thức & Chuyên Đề Ngữ Pháp
+              </h3>
+              <p className="text-xs text-[#CBD5E1] max-w-2xl leading-relaxed">
+                Biên soạn công thức cấu trúc câu, giải thích cách dùng, ví dụ minh họa và mẹo làm bài thi. Học sinh có thể ôn tập ngữ pháp trước khi làm bài tập hoặc kiểm tra.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              <button
+                onClick={() => openAddGrammarModal()}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#FFD166] text-[#0D1B2A] text-xs font-black hover:bg-[#FFD166]/90 transition shadow-lg cursor-pointer"
+              >
+                <Plus size={16} />
+                <span>+ Thêm Chuyên Đề</span>
+              </button>
+
+              <button
+                onClick={() => setShowBatchGrammarModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#131F2E] border border-[#FFD166]/40 text-[#FFD166] text-xs font-bold hover:bg-[#FFD166]/15 transition cursor-pointer"
+              >
+                <Upload size={16} />
+                <span>Nhập File Ngữ Pháp</span>
+              </button>
+
+              {customGrammar.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm('Bạn có chắc chắn muốn xóa tất cả chuyên đề ngữ pháp tự thêm?')) {
+                      clearAllCustomGrammar();
+                      showToast('Đã xóa toàn bộ chuyên đề ngữ pháp tự thêm');
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2.5 rounded-2xl bg-[#131F2E] border border-[#EF476F]/30 text-[#EF476F] text-xs font-bold hover:bg-[#EF476F]/10 transition cursor-pointer"
+                >
+                  <Trash2 size={15} />
+                  <span>Xóa Hết</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Grammar Filter Bar */}
+          <div className="p-4 rounded-2xl bg-[#1B263B] border border-[#27384E] flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3 flex-1 min-w-[240px]">
+              <div className="relative flex-1">
+                <Search size={15} className="absolute left-3 top-3 text-[#778DA9]" />
+                <input
+                  type="text"
+                  value={grammarSearchTerm}
+                  onChange={(e) => setGrammarSearchTerm(e.target.value)}
+                  placeholder="Tìm kiếm chuyên đề ngữ pháp..."
+                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-[#131F2E] border border-[#27384E] text-white focus:outline-none placeholder:text-[#778DA9]"
+                />
+              </div>
+
+              <select
+                value={grammarGradeFilter}
+                onChange={(e) => setGrammarGradeFilter(Number(e.target.value))}
+                className="px-3 py-2 rounded-xl bg-[#131F2E] border border-[#27384E] text-white font-bold focus:outline-none"
+              >
+                <option value={0}>Tất cả khối lớp</option>
+                {[6, 7, 8, 9, 10, 11, 12].map((g) => (
+                  <option key={g} value={g}>
+                    Khối {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="text-xs text-[#778DA9] font-medium">
+              Đang hiển thị: <strong className="text-white">{filteredGrammar.length}</strong> / {customGrammar.length} bài
+            </div>
+          </div>
+
+          {/* Grammar List Cards */}
+          {filteredGrammar.length === 0 ? (
+            <div className="p-12 rounded-3xl bg-[#1B263B] border border-[#27384E] text-center space-y-4">
+              <div className="w-16 h-16 rounded-3xl bg-[#FFD166]/10 text-[#FFD166] flex items-center justify-center mx-auto border border-[#FFD166]/20 shadow-inner">
+                <BookOpen size={32} />
+              </div>
+              <div>
+                <h4 className="text-base font-black text-white">Chưa có chuyên đề ngữ pháp nào tự biên soạn</h4>
+                <p className="text-xs text-[#778DA9] max-w-md mx-auto mt-1">
+                  Nhấn <strong className="text-[#FFD166]">"+ Thêm Chuyên Đề"</strong> hoặc <strong>"Nhập File Ngữ Pháp"</strong> để thêm các thì, cấu trúc câu, mệnh đề quan hệ...
+                </p>
+              </div>
+              <button
+                onClick={() => openAddGrammarModal()}
+                className="px-5 py-2.5 rounded-xl bg-[#FFD166] text-[#0D1B2A] font-black text-xs hover:bg-[#FFD166]/90 transition cursor-pointer"
+              >
+                + Thêm Chuyên Đề Mới
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredGrammar.map((g) => (
+                <div
+                  key={g.id}
+                  className="p-5 rounded-3xl bg-[#1B263B] border border-[#27384E] flex flex-col justify-between space-y-4 shadow-xl hover:border-[#FFD166]/50 transition"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-[#FFD166]/20 text-[#FFD166] border border-[#FFD166]/30">
+                        Lớp {g.grade} • Chuyên Đề Trọng Tâm
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => openEditGrammarModal(g)}
+                          className="p-1.5 rounded-lg bg-[#131F2E] text-[#CBD5E1] hover:text-[#FFD166] transition text-xs cursor-pointer"
+                          title="Sửa chuyên đề"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Xóa chuyên đề "${g.title}"?`)) {
+                              deleteCustomGrammar(g.id);
+                              showToast('Đã xóa chuyên đề ngữ pháp');
+                            }
+                          }}
+                          className="p-1.5 rounded-lg bg-[#131F2E] text-[#EF476F] hover:bg-[#EF476F]/20 transition text-xs cursor-pointer"
+                          title="Xóa chuyên đề"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <h4 className="text-base font-black text-white">{g.title}</h4>
+
+                    <div className="p-3 rounded-2xl bg-[#131F2E] border border-[#27384E] space-y-1.5">
+                      <span className="text-[10px] font-bold text-[#FFD166] uppercase block">Cấu Trúc / Công Thức:</span>
+                      <code className="text-xs font-mono font-bold text-[#00E5FF] block">{g.formula}</code>
+                    </div>
+
+                    <p className="text-xs text-[#CBD5E1] leading-relaxed">{g.explanationVi}</p>
+
+                    {(g.exampleEn || g.exampleVi) && (
+                      <div className="p-3 rounded-2xl bg-[#0D1B2A] border border-[#27384E]/70 text-xs space-y-1">
+                        {g.exampleEn && <p className="text-white font-medium">🇬🇧 {g.exampleEn}</p>}
+                        {g.exampleVi && <p className="text-[#ADB5BD]">🇻🇳 {g.exampleVi}</p>}
+                      </div>
+                    )}
+
+                    {g.usageNotes && (
+                      <div className="text-[11px] text-[#FFD166] bg-[#FFD166]/10 p-2.5 rounded-xl border border-[#FFD166]/20">
+                        <strong>💡 Mẹo thi & Lưu ý:</strong> {g.usageNotes}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -780,6 +1555,379 @@ export const TeacherPortalScreen: React.FC<TeacherPortalScreenProps> = ({
           showToast(`Nhập đề thi "${newAssign.title}" từ file thành công!`);
         }}
       />
+
+      {/* Batch Word Import Modal */}
+      <BatchWordImportModal
+        isOpen={showBatchWordModal}
+        onClose={() => setShowBatchWordModal(false)}
+        onImportWords={async (words) => {
+          const count = await addCustomWordsBatch(words);
+          showToast(`Đã nhập thành công ${count} từ mới vào kho dữ liệu!`);
+          return count;
+        }}
+        defaultGrade={wordGradeFilter || 10}
+        defaultUnit={1}
+      />
+
+      {/* Batch Grammar Import Modal */}
+      <BatchGrammarImportModal
+        isOpen={showBatchGrammarModal}
+        onClose={() => setShowBatchGrammarModal(false)}
+        onImportGrammar={async (lessons) => {
+          const count = await addCustomGrammarBatch(lessons);
+          showToast(`Đã nhập thành công ${count} chuyên đề ngữ pháp!`);
+          return count;
+        }}
+        defaultGrade={grammarGradeFilter || 10}
+      />
+
+      {/* Add / Edit Single Word Modal */}
+      {showAddWordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full max-w-xl rounded-3xl bg-[#1B263B] border border-[#06D6A0]/40 shadow-2xl p-6 space-y-4 text-xs my-auto max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-[#27384E]">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-[#06D6A0]/20 text-[#06D6A0] flex items-center justify-center font-black">
+                  <Languages size={18} />
+                </div>
+                <div>
+                  <h3 className="font-black text-white text-base">
+                    {editingWord ? 'Chỉnh Sửa Từ Vựng' : 'Thêm Từ Vựng Mới'}
+                  </h3>
+                  <p className="text-[11px] text-[#778DA9]">
+                    Đồng bộ tự động vào Unit học tập và game Săn Từ của học sinh
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setShowAddWordModal(false);
+                  setEditingWord(null);
+                }}
+                className="p-1.5 rounded-xl text-[#778DA9] hover:text-white hover:bg-[#27384E] cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3.5">
+              {/* Word & Auto-fill */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[#CBD5E1] font-bold">Từ tiếng Anh (Word / Phrase): *</label>
+                  <button
+                    type="button"
+                    onClick={() => handleAutoFillFromDictionary(wordInput)}
+                    className="text-[#00E5FF] hover:underline font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles size={12} />
+                    <span>Tra từ điển & Điền tự động</span>
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={wordInput}
+                  onChange={(e) => setWordInput(e.target.value)}
+                  placeholder="Ví dụ: perseverance, breadwinner, eco-friendly..."
+                  className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-white font-bold focus:border-[#06D6A0] focus:outline-none"
+                />
+              </div>
+
+              {/* Phonetic & Part of Speech */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[#CBD5E1] font-bold block mb-1">Phiên âm IPA:</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={phoneticInput}
+                      onChange={(e) => setPhoneticInput(e.target.value)}
+                      placeholder="/ˌpɜː.sɪˈvɪə.rəns/"
+                      className="w-full p-2.5 pr-8 rounded-xl bg-[#131F2E] border border-[#27384E] text-[#FFD166] font-mono focus:border-[#06D6A0] focus:outline-none"
+                    />
+                    {wordInput && (
+                      <button
+                        type="button"
+                        onClick={() => audioService.speakEnglish(wordInput)}
+                        className="absolute right-2 top-2.5 text-[#00E5FF] hover:text-white cursor-pointer"
+                        title="Nghe thử phát âm"
+                      >
+                        <Volume2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[#CBD5E1] font-bold block mb-1">Từ loại:</label>
+                  <select
+                    value={partOfSpeechInput}
+                    onChange={(e) => setPartOfSpeechInput(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-white focus:outline-none"
+                  >
+                    <option value="noun">Danh từ (Noun)</option>
+                    <option value="verb">Động từ (Verb)</option>
+                    <option value="adjective">Tính từ (Adjective)</option>
+                    <option value="adverb">Trạng từ (Adverb)</option>
+                    <option value="phrase">Cụm từ (Phrase)</option>
+                    <option value="idiom">Thành ngữ (Idiom)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Vietnamese Meaning */}
+              <div>
+                <label className="text-[#CBD5E1] font-bold block mb-1">Dịch nghĩa tiếng Việt: *</label>
+                <input
+                  type="text"
+                  value={meaningInput}
+                  onChange={(e) => setMeaningInput(e.target.value)}
+                  placeholder="Ví dụ: sự kiên trì, người trụ cột, thân thiện môi trường..."
+                  className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-[#06D6A0] font-bold focus:border-[#06D6A0] focus:outline-none"
+                />
+              </div>
+
+              {/* Grade and Unit Selection */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[#CBD5E1] font-bold block mb-1">Khối lớp:</label>
+                  <select
+                    value={wordGradeInput}
+                    onChange={(e) => setWordGradeInput(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-white font-bold"
+                  >
+                    {[6, 7, 8, 9, 10, 11, 12].map((g) => (
+                      <option key={g} value={g}>
+                        Khối {g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[#CBD5E1] font-bold block mb-1">Unit bài học:</label>
+                  <select
+                    value={wordUnitInput}
+                    onChange={(e) => setWordUnitInput(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-white font-bold"
+                  >
+                    <option value={0}>Unit Bổ sung (Chuyên đề ngoài sách)</option>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((u) => (
+                      <option key={u} value={u}>
+                        Unit {u}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Example Bilingual */}
+              <div className="space-y-2">
+                <label className="text-[#CBD5E1] font-bold block">Câu ví dụ minh họa:</label>
+                <input
+                  type="text"
+                  value={exampleEnInput}
+                  onChange={(e) => setExampleEnInput(e.target.value)}
+                  placeholder="🇬🇧 Câu tiếng Anh: Success requires hard work and perseverance."
+                  className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-white focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={exampleViInput}
+                  onChange={(e) => setExampleViInput(e.target.value)}
+                  placeholder="🇻🇳 Dịch tiếng Việt: Thành công đòi hỏi sự chăm chỉ và kiên trì."
+                  className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-[#ADB5BD] focus:outline-none"
+                />
+              </div>
+
+              {/* Distractors for Game/Quiz */}
+              <div>
+                <label className="text-[#CBD5E1] font-bold block mb-1">
+                  Từ gây nhiễu cho Game Đấu Từ / Trắc Nghiệm (3 phương án sai):
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    value={distractor1Input}
+                    onChange={(e) => setDistractor1Input(e.target.value)}
+                    placeholder="Phương án sai 1"
+                    className="w-full p-2 rounded-xl bg-[#131F2E] border border-[#27384E] text-white text-[11px]"
+                  />
+                  <input
+                    type="text"
+                    value={distractor2Input}
+                    onChange={(e) => setDistractor2Input(e.target.value)}
+                    placeholder="Phương án sai 2"
+                    className="w-full p-2 rounded-xl bg-[#131F2E] border border-[#27384E] text-white text-[11px]"
+                  />
+                  <input
+                    type="text"
+                    value={distractor3Input}
+                    onChange={(e) => setDistractor3Input(e.target.value)}
+                    placeholder="Phương án sai 3"
+                    className="w-full p-2 rounded-xl bg-[#131F2E] border border-[#27384E] text-white text-[11px]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#27384E]">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddWordModal(false);
+                  setEditingWord(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-[#CBD5E1] hover:bg-[#27384E] transition cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveWord}
+                className="px-5 py-2.5 rounded-xl bg-[#06D6A0] text-[#0D1B2A] font-black text-xs hover:bg-[#06D6A0]/90 transition shadow-lg shadow-[#06D6A0]/20 cursor-pointer"
+              >
+                {editingWord ? 'Lưu Thay Đổi' : 'Lưu Từ Vựng Mới'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Single Grammar Modal */}
+      {showAddGrammarModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full max-w-xl rounded-3xl bg-[#1B263B] border border-[#FFD166]/40 shadow-2xl p-6 space-y-4 text-xs my-auto max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-[#27384E]">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-[#FFD166]/20 text-[#FFD166] flex items-center justify-center font-black">
+                  <BookOpen size={18} />
+                </div>
+                <div>
+                  <h3 className="font-black text-white text-base">
+                    {editingGrammar ? 'Chỉnh Sửa Chuyên Đề Ngữ Pháp' : 'Thêm Chuyên Đề Ngữ Pháp Mới'}
+                  </h3>
+                  <p className="text-[11px] text-[#778DA9]">
+                    Soạn công thức, giải thích và ví dụ cho học sinh ôn luyện
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setShowAddGrammarModal(false);
+                  setEditingGrammar(null);
+                }}
+                className="p-1.5 rounded-xl text-[#778DA9] hover:text-white hover:bg-[#27384E] cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3.5">
+              <div>
+                <label className="text-[#CBD5E1] font-bold block mb-1">Tên chuyên đề ngữ pháp: *</label>
+                <input
+                  type="text"
+                  value={grammarTitleInput}
+                  onChange={(e) => setGrammarTitleInput(e.target.value)}
+                  placeholder="Ví dụ: Present Perfect Tense (Thì Hiện Tại Hoàn Thành)"
+                  className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-white font-bold focus:border-[#FFD166] focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[#CBD5E1] font-bold block mb-1">Khối lớp:</label>
+                  <select
+                    value={grammarGradeInput}
+                    onChange={(e) => setGrammarGradeInput(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-white font-bold"
+                  >
+                    {[6, 7, 8, 9, 10, 11, 12].map((g) => (
+                      <option key={g} value={g}>
+                        Khối {g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[#CBD5E1] font-bold block mb-1">Cấu trúc / Công thức: *</label>
+                  <input
+                    type="text"
+                    value={grammarFormulaInput}
+                    onChange={(e) => setGrammarFormulaInput(e.target.value)}
+                    placeholder="S + have/has + V3/ed + O"
+                    className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-[#00E5FF] font-mono font-bold focus:border-[#FFD166] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[#CBD5E1] font-bold block mb-1">Giải thích cách dùng & quy tắc: *</label>
+                <textarea
+                  rows={3}
+                  value={grammarExplanationInput}
+                  onChange={(e) => setGrammarExplanationInput(e.target.value)}
+                  placeholder="Diễn tả hành động xảy ra trong quá khứ kéo dài đến hiện tại hoặc vừa mới xảy ra..."
+                  className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-white focus:outline-none leading-relaxed"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[#CBD5E1] font-bold block">Ví dụ minh họa song ngữ:</label>
+                <input
+                  type="text"
+                  value={grammarExampleEnInput}
+                  onChange={(e) => setGrammarExampleEnInput(e.target.value)}
+                  placeholder="🇬🇧 I have lived in Thai Nguyen for five years."
+                  className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-white focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={grammarExampleViInput}
+                  onChange={(e) => setGrammarExampleViInput(e.target.value)}
+                  placeholder="🇻🇳 Tôi đã sống ở Thái Nguyên được năm năm."
+                  className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-[#ADB5BD] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[#CBD5E1] font-bold block mb-1">Mẹo làm bài & Lưu ý đặc biệt:</label>
+                <textarea
+                  rows={2}
+                  value={grammarUsageNotesInput}
+                  onChange={(e) => setGrammarUsageNotesInput(e.target.value)}
+                  placeholder="Dấu hiệu nhận biết: since, for, already, yet, just, ever, never..."
+                  className="w-full p-2.5 rounded-xl bg-[#131F2E] border border-[#27384E] text-[#FFD166] focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#27384E]">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddGrammarModal(false);
+                  setEditingGrammar(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-[#CBD5E1] hover:bg-[#27384E] transition cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveGrammar}
+                className="px-5 py-2.5 rounded-xl bg-[#FFD166] text-[#0D1B2A] font-black text-xs hover:bg-[#FFD166]/90 transition shadow-lg cursor-pointer"
+              >
+                {editingGrammar ? 'Lưu Thay Đổi' : 'Lưu Chuyên Đề'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Class Modal */}
       {showCreateClassModal && (

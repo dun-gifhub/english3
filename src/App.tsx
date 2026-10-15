@@ -3,6 +3,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/Navbar';
 import { TeacherPasscodeModal } from './components/TeacherPasscodeModal';
 import { NeonRenderModal } from './components/NeonRenderModal';
+import { ThemeCustomizerModal } from './components/ThemeCustomizerModal';
 import { HomeScreen } from './screens/HomeScreen';
 import { TapGameScreen } from './screens/TapGameScreen';
 import { TeacherPortalScreen } from './screens/TeacherPortalScreen';
@@ -23,6 +24,7 @@ function MainApp() {
   const [activeUnitToPlay, setActiveUnitToPlay] = useState<UnitTopic | null>(null);
   const [activeAssignmentToTake, setActiveAssignmentToTake] = useState<TeacherAssignment | null>(null);
   const [showTeacherModal, setShowTeacherModal] = useState<boolean>(false);
+  const [showThemeModal, setShowThemeModal] = useState<boolean>(false);
 
   const effectiveTheme = getEffectiveTheme(themeConfig);
   const showCustomBg = Boolean(
@@ -119,6 +121,7 @@ function MainApp() {
                 setActiveTab(tab);
               }}
               onRequestTeacherModal={() => setShowTeacherModal(true)}
+              onRequestThemeModal={() => setShowThemeModal(true)}
             />
 
             <main className="flex-1 max-w-6xl w-full mx-auto px-4 pt-4 sm:pt-6">
@@ -133,6 +136,7 @@ function MainApp() {
                     setCurrentActivity(`Đang làm bài: ${assign.title} (K${assign.grade})`);
                   }}
                   onOpenTeacherPortal={() => setActiveTab('teacher')}
+                  onRequestThemeModal={() => setShowThemeModal(true)}
                 />
               )}
 
@@ -170,6 +174,12 @@ function MainApp() {
             setShowTeacherModal(false);
             setActiveTab('teacher');
           }}
+        />
+
+        {/* Theme & Wallpaper Customizer Modal for Students & Teachers */}
+        <ThemeCustomizerModal
+          isOpen={showThemeModal}
+          onClose={() => setShowThemeModal(false)}
         />
       </div>
     </div>

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { lookupDictionary, lookupUniversalOnline } from '../services/dictionaryDatabase';
 import { audioService } from '../services/audioService';
 import { DictionaryEntry } from '../types';
+import { useApp } from '../context/AppContext';
 import {
   Search,
   Volume2,
@@ -12,14 +13,23 @@ import {
   Loader2,
   BookOpen,
   Check,
-  TrendingUp
+  TrendingUp,
+  Plus,
+  BookmarkCheck
 } from 'lucide-react';
 
 export const DictionaryScreen: React.FC = () => {
+  const { addCustomWord, customWords, selectedGrade } = useApp();
   const [query, setQuery] = useState('');
   const [isEnToVi, setIsEnToVi] = useState(true);
   const [onlineResult, setOnlineResult] = useState<DictionaryEntry | null>(null);
   const [isLoadingOnline, setIsLoadingOnline] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   // Popular sample words for quick test & learning
   const POPULAR_TAGS = [
@@ -209,14 +219,49 @@ export const DictionaryScreen: React.FC = () => {
                 )}
               </div>
 
-              {/* Pronunciation Audio Button */}
-              <button
-                onClick={() => audioService.speakEnglish(entry.wordEn)}
-                className="p-2.5 rounded-xl bg-[#131F2E] hover:bg-[#00E5FF] hover:text-[#0D1B2A] text-[#00E5FF] border border-[#00E5FF]/30 transition-all cursor-pointer shrink-0"
-                title="Nghe phát âm chuẩn tiếng Anh"
-              >
-                <Volume2 size={18} />
-              </button>
+              {/* Action Buttons: Save Word & Speak Audio */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {customWords.some(w => w.word.toLowerCase() === entry.wordEn.toLowerCase()) ? (
+                  <span
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#06D6A0]/20 text-[#06D6A0] text-xs font-bold border border-[#06D6A0]/30"
+                    title="Từ này đã có trong kho từ vựng học tập"
+                  >
+                    <BookmarkCheck size={14} />
+                    <span className="hidden sm:inline">Đã lưu</span>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => {
+                      addCustomWord({
+                        word: entry.wordEn,
+                        phonetic: entry.phonetic || `/${entry.wordEn.toLowerCase()}/`,
+                        meaningVi: entry.meaningVi,
+                        partOfSpeech: entry.partOfSpeech || 'noun',
+                        grade: selectedGrade || 10,
+                        unitNumber: 0,
+                        exampleEn: entry.exampleEn || '',
+                        exampleVi: entry.exampleVi || '',
+                        distractorsVi: entry.synonyms && entry.synonyms.length >= 2 ? entry.synonyms.slice(0, 3) : ['phương án sai 1', 'phương án sai 2', 'ngược nghĩa']
+                      });
+                      showToast(`Đã lưu "${entry.wordEn}" vào kho từ mới (Lớp ${selectedGrade || 10})!`);
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#06D6A0] text-[#0D1B2A] text-xs font-black hover:bg-[#06D6A0]/90 transition shadow-sm cursor-pointer"
+                    title="Lưu từ này vào kho từ vựng học tập & thi đấu"
+                  >
+                    <Plus size={14} />
+                    <span>Lưu từ</span>
+                  </button>
+                )}
+
+                {/* Pronunciation Audio Button */}
+                <button
+                  onClick={() => audioService.speakEnglish(entry.wordEn)}
+                  className="p-2.5 rounded-xl bg-[#131F2E] hover:bg-[#00E5FF] hover:text-[#0D1B2A] text-[#00E5FF] border border-[#00E5FF]/30 transition-all cursor-pointer shrink-0"
+                  title="Nghe phát âm chuẩn tiếng Anh"
+                >
+                  <Volume2 size={18} />
+                </button>
+              </div>
             </div>
 
             {/* Bilingual Example Box */}
@@ -256,6 +301,14 @@ export const DictionaryScreen: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-60 px-5 py-3 rounded-2xl bg-[#06D6A0] text-[#0D1B2A] font-black text-xs shadow-2xl shadow-[#06D6A0]/30 flex items-center gap-2 animate-bounce">
+          <Check size={16} />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 };
